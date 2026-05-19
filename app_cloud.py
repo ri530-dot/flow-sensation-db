@@ -75,23 +75,9 @@ NOISE = {'[音楽]', '[拍手]', '[笑い]', '[Music]', '[Applause]'}
 def get_words(video_id):
     """youtube-transcript-apiで字幕チャンクを取得して返す"""
     try:
-        from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound
-        tlist = YouTubeTranscriptApi.list_transcripts(video_id)
-
-        # 日本語を優先、なければ自動生成字幕を日本語に翻訳
-        try:
-            t = tlist.find_transcript(['ja', 'ja-JP'])
-        except NoTranscriptFound:
-            generated = [x for x in tlist if x.is_generated]
-            if not generated:
-                st.warning("自動生成字幕が見つかりません")
-                return []
-            t = generated[0].translate('ja')
-
-        entries = t.fetch()
-        st.info(f"[DEBUG] fetch成功: {len(entries)}件, 先頭={entries[0] if entries else 'なし'}")
-    except Exception as e:
-        st.warning(f"[DEBUG] 例外: {type(e).__name__}: {e}")
+        from youtube_transcript_api import YouTubeTranscriptApi
+        entries = YouTubeTranscriptApi.get_transcript(video_id, languages=['ja', 'ja-JP'])
+    except Exception:
         return []
 
     words = []
