@@ -1,0 +1,10 @@
+.streamlit/secrets.toml
+audio_cache/
+lyrics_cache/
+separated/
+sensation_db.json
+__pycache__/
+*.pyc
+*.mp3
+*.vtt
+results/
