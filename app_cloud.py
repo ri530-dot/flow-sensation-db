@@ -16,10 +16,6 @@ SUPABASE_URL = st.secrets["SUPABASE_URL"]
 SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
 TABLE = "entries"
 
-BASE         = Path(__file__).parent
-LYRICS_CACHE = BASE / "lyrics_cache"
-LYRICS_CACHE.mkdir(exist_ok=True)
-
 BUFFER_SEC = 1.0  # 分析時に前後に追加するバッファ（秒）
 
 # ── Supabase操作 ──────────────────────────────────
@@ -73,67 +69,31 @@ def search_youtube(query, n=8):
             continue
     return tracks
 
-# ── 単語レベルのタイムスタンプを取得 ─────────────
+# ── 字幕を取得（youtube-transcript-api使用） ──────
+NOISE = {'[音楽]', '[拍手]', '[笑い]', '[Music]', '[Applause]'}
+
 def get_words(video_id):
-    """VTTの<c>タグを解析して単語ごとのタイムスタンプを返す"""
-    vtt_path = LYRICS_CACHE / f"{video_id}.ja.vtt"
-    if not vtt_path.exists():
-        subprocess.run(
-            ["yt-dlp", "--write-auto-subs", "--sub-lang", "ja",
-             "--skip-download", "-o", str(LYRICS_CACHE / video_id),
-             f"https://www.youtube.com/watch?v={video_id}"],
-            capture_output=True
-        )
-    if not vtt_path.exists():
-        return []
+    """youtube-transcript-apiで字幕チャンクを取得して返す"""
+    try:
+        from youtube_transcript_api import YouTubeTranscriptApi
+        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['ja', 'ja-JP'])
+    except Exception:
+        try:
+            from youtube_transcript_api import YouTubeTranscriptApi
+            transcript = YouTubeTranscriptApi.get_transcript(video_id)
+        except Exception:
+            return []
 
-    def to_sec(ts):
-        parts = ts.split(":")
-        if len(parts) == 2:
-            return float(parts[0]) * 60 + float(parts[1])
-        return float(parts[0]) * 3600 + float(parts[1]) * 60 + float(parts[2])
-
-    content = vtt_path.read_text(encoding="utf-8")
     words = []
-    seen_texts = set()
-
-    for block in content.split("\n\n"):
-        m = re.search(r"(\d+:\d+:\d+\.\d+) --> (\d+:\d+:\d+\.\d+)", block)
-        if not m:
+    for entry in transcript:
+        text = entry['text'].strip()
+        if not text or text in NOISE:
             continue
-        block_start = to_sec(m.group(1))
-        block_end   = to_sec(m.group(2))
-
-        # テキスト行を抽出（タイムスタンプ行・番号行を除く）
-        raw_lines = block.strip().split("\n")
-        text_lines = [l for l in raw_lines
-                      if "-->" not in l and not re.match(r"^\d+$", l.strip()) and l.strip()]
-        if not text_lines:
-            continue
-        text_line = text_lines[-1]
-
-        # 重複ブロックをスキップ
-        clean = re.sub(r"<[^>]+>", "", text_line).strip()
-        if clean in seen_texts or not clean:
-            continue
-        seen_texts.add(clean)
-
-        # ブロック先頭テキスト（最初の時刻タグより前）
-        first_part = re.split(r"<\d+:\d+:\d+\.\d+>", text_line)[0]
-        first_word = re.sub(r"<[^>]+>", "", first_part).strip()
-        if first_word:
-            words.append({"text": first_word, "start": block_start, "end": block_end})
-
-        # <timestamp><c>単語</c> を順に取得
-        matches = list(re.finditer(r"<(\d+:\d+:\d+\.\d+)><c>([^<]*)</c>", text_line))
-        for j, match in enumerate(matches):
-            word = match.group(2).strip()
-            if not word:
-                continue
-            ts_start = to_sec(match.group(1))
-            ts_end   = to_sec(matches[j+1].group(1)) if j + 1 < len(matches) else block_end
-            words.append({"text": word, "start": ts_start, "end": ts_end})
-
+        words.append({
+            'text': text,
+            'start': entry['start'],
+            'end':   entry['start'] + entry['duration'],
+        })
     return words
 
 # ════════════════════════════════════════════════════
