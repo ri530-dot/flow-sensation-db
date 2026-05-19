@@ -77,11 +77,12 @@ def get_words(video_id):
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['ja', 'ja-JP'])
-    except Exception:
+    except Exception as e1:
         try:
             from youtube_transcript_api import YouTubeTranscriptApi
             transcript = YouTubeTranscriptApi.get_transcript(video_id)
-        except Exception:
+        except Exception as e2:
+            st.warning(f"字幕エラー: {e1} / {e2}")
             return []
 
     words = []
