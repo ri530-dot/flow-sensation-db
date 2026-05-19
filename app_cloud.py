@@ -84,11 +84,14 @@ def get_words(video_id):
         except NoTranscriptFound:
             generated = [x for x in tlist if x.is_generated]
             if not generated:
+                st.warning("自動生成字幕が見つかりません")
                 return []
             t = generated[0].translate('ja')
 
         entries = t.fetch()
-    except Exception:
+        st.info(f"[DEBUG] fetch成功: {len(entries)}件, 先頭={entries[0] if entries else 'なし'}")
+    except Exception as e:
+        st.warning(f"[DEBUG] 例外: {type(e).__name__}: {e}")
         return []
 
     words = []
